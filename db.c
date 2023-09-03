@@ -1,3 +1,12 @@
+// Bugs
+//
+// If the data goes over the current page_size, it does not
+// create a new page and write data in it.
+//
+// Also, the total space for the source file is being calculated wrongly.
+// It is being calculated as MAX_PAGES * PAGE_SIZE instead of num_pages * PAGE_SIZE
+
+
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -12,7 +21,18 @@
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
 #define MAX_PAGES 10
 
+#define QUERY_TYPE_INSERT "insert"
+#define QUERY_TYPE_SELECT "select"
+#define QUERY_TYPE_EXIT ".exit"
+
+enum QUERY_TYPE {
+		QUERY_INSERT,
+		QUERY_SELECT,
+		QUERY_EXIT,
+};
+
 typedef struct {
+		/* char *name; */
 		char name[100];
 }Row;
 
@@ -35,7 +55,14 @@ typedef struct {
 		Table *table;
 } Cursor;
 
-const uint32_t PAGE_SIZE = 500;
+typedef struct {
+		enum QUERY_TYPE statement_type;
+		Cursor *cursor;
+		Row *row;
+} Statement;
+
+
+const uint32_t PAGE_SIZE = 50;
 const uint32_t NODE_TYPE_SIZE = sizeof(uint32_t); // 0 = internal, 1 = leaf
 const uint32_t HEADER_SIZE = NODE_TYPE_SIZE;
 const uint32_t NAME_SIZE = size_of_attribute(Row, name);
@@ -46,6 +73,8 @@ const uint32_t NODE_SIZE = HEADER_SIZE + ROW_SIZE;
 
 const uint32_t GLOBAL_HEADER_NUM_NODES_SIZE = sizeof(uint32_t);
 const uint32_t GLOBAL_HEADER_NUM_NODES_OFFSET = 0;
+
+const uint32_t MAX_QUERY_TYPE_SIZE = 8;
 
 uint32_t *get_num_nodes_address(void *node) {
 		return node + GLOBAL_HEADER_NUM_NODES_OFFSET;
@@ -59,8 +88,8 @@ void set_num_nodes(void *node, int value) {
 		*get_num_nodes_address(node) = value;
 }
 
-void *get_cell_address(void *node, int cell_no) {
-		return node + GLOBAL_HEADER_NUM_NODES_SIZE + (cell_no * NODE_SIZE);
+void *get_cell_address(void *node, uint32_t cell_no) {
+		return node + GLOBAL_HEADER_NUM_NODES_SIZE + (cell_no * ROW_SIZE);
 }
 
 void *get_page(Pager *pager, int page_no) {
@@ -75,10 +104,11 @@ void *get_page(Pager *pager, int page_no) {
 				// allocate PAGE_SIZE and get starting address of the page
 				//
         int no_of_pages = pager->file_length / PAGE_SIZE;
+				printf("no_of_pages = %d\n", no_of_pages);
 
-        /* if (pager->file_length % PAGE_SIZE) { */
-            /* no_of_pages++; */
-        /* } */
+				if (pager->file_length % PAGE_SIZE) {
+						no_of_pages++;
+				}
 
 				void *page = malloc(PAGE_SIZE);
 				int page_bytes = page_no * PAGE_SIZE;
@@ -108,6 +138,7 @@ Pager *open_pager() {
 
 		int file_descriptor = open("source", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
     int file_length = lseek(file_descriptor, 0, SEEK_END);
+		printf("len = %d\n", file_length);
 
 		for (int t=0;t<MAX_PAGES;t++) {
 				pager->pages[t] = NULL;
@@ -134,7 +165,7 @@ Table *open_table() {
 }
 
 int flush_page_to_disk(Pager *pager, int page_no) {
-		void *page =get_page(pager, page_no);
+		void *page = get_page(pager, page_no);
 		lseek(pager->file_descriptor, page_no * PAGE_SIZE, SEEK_SET);
 		int bytes_written = write(pager->file_descriptor, page, PAGE_SIZE);
 
@@ -143,13 +174,15 @@ int flush_page_to_disk(Pager *pager, int page_no) {
 
 void write_to_disk(Table *table) {
 		Pager *pager = table->pager;
+		int total_bytes_written_to_disk = 0;
 		for (int t=0;t<=MAX_PAGES;t++) {
 				if (pager->pages[t] == NULL) {
 						continue;
 				}
 
-				flush_page_to_disk(pager, t);
+				total_bytes_written_to_disk += flush_page_to_disk(pager, t);
 		}
+		printf("written %d bytes to disk\n", total_bytes_written_to_disk);
 }
 
 void serialize_row(void *destination, Row *row) {
@@ -171,17 +204,16 @@ void insert_query(Cursor *cursor, Row *row) {
 		void *page = pager->pages[cursor->page_no];
 		uint32_t no_of_cells = get_num_nodes_value(page);
 		uint32_t cell_to_be_inserted = no_of_cells;
-		printf("cells = %d\n", cell_to_be_inserted);
 
-		void *destination = page + (cell_to_be_inserted * NODE_SIZE) + GLOBAL_HEADER_NUM_NODES_SIZE;
-		/* printf("%p", destination); */
+		void *destination = get_cell_address(page, cell_to_be_inserted);
+		printf("inserted row at %p\n", destination);
 
 		serialize_row(destination, row);
 
 		table->no_of_rows += 1;
 		set_num_nodes(page, cell_to_be_inserted + 1);
-		printf("dest = %s", (char *)destination);
 
+		printf("cells = %d\n", get_num_nodes_value(page));
 		write_to_disk(table);
 }
 
@@ -228,7 +260,8 @@ void select_query(Table *table) {
 		void *start = page + GLOBAL_HEADER_NUM_NODES_SIZE;
 		while (!cursor->end_of_table) {
 				Row *row = malloc(sizeof(Row));
-				void *cell_address = cursor_value(cursor);
+				/* void *cell_address = cursor_value(cursor); */
+				void *cell_address = get_cell_address(page, cursor->cell_no);
 
 				deserialize_row(cell_address, row);
 				printf("cell_no = %d, name = %s, addr = %p\n", cursor->cell_no, row->name, cell_address);
@@ -246,32 +279,63 @@ void select_query(Table *table) {
 
 }
 
+int are_strings_equal(char *string_one, char *string_two) {
+		return strcmp(string_one, string_two) == 0;
+}
+
+void prepare_statement(Statement *statement, Table *table) {
+		switch (statement->statement_type) {
+				case QUERY_SELECT:
+						select_query(table);
+						break;
+				case QUERY_INSERT:
+						insert_query(statement->cursor, statement->row);
+						break;
+				case QUERY_EXIT:
+						write_to_disk(table);
+						exit(0);
+				default:
+						printf("unsupported command\n");
+						exit(1);
+		}
+}
+
+Row *make_row(char *name) {
+		Row *row = malloc(sizeof(Row));
+		/* row->name = malloc(NAME_SIZE); */
+		strcpy(row->name, name);
+		return row;
+}
 
 int main() {
 		printf("opening db\n");
 		Table *table = open_table();
 		Cursor *cursor = cursor_at_table_start(table);
 
-		Row *row = malloc(sizeof(Row));
-		strcpy(row->name, "manosriram3");
+		while (1) {
+				char *query_type = malloc(MAX_QUERY_TYPE_SIZE);
+				Statement *statement = malloc(sizeof(Statement));
+				statement->cursor = cursor;
+				printf("> ");
 
-		/* insert_query(cursor, row); */
+				scanf("%s", query_type);
 
-		/* printf("%d", cursor->cell_no); */
-		/* insert_query(cursor, row); */
-		/* cursor_next(cursor); */
-		/* printf("%d", cursor->cell_no); */
+				if (query_type[0] == '.') {
+						if (are_strings_equal(query_type, QUERY_TYPE_EXIT)) {
+								statement->statement_type = QUERY_EXIT;
+						}
+				}
 
-		/* get_page(table->pager, 1); */
+				if (are_strings_equal(query_type, QUERY_TYPE_SELECT)) {
+						statement->statement_type = QUERY_SELECT;
+				} else if (are_strings_equal(query_type, QUERY_TYPE_INSERT)) {
+						char *name = malloc(NAME_SIZE);
+						scanf("%s", name);
+						statement->row = make_row(name);
+						statement->statement_type = QUERY_INSERT;
+				}
 
-		/* while (1) { */
-				/* char *temp; */
-				/* Row *row = malloc(sizeof(Row)); */
-				/* scanf("%s", temp); */
-				/* strcpy(row->name, temp); */
-				/* insert_query(table, row); */
-		select_query(table);
-		/* } */
-
+				prepare_statement(statement, table);
+		}
 		return 0;
 }
