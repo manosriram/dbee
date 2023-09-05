@@ -19,7 +19,7 @@
 #include <unistd.h>
 
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
-#define MAX_PAGES 10
+#define MAX_PAGES 100
 
 #define QUERY_TYPE_INSERT "insert"
 #define QUERY_TYPE_SELECT "select"
@@ -33,7 +33,7 @@ enum QUERY_TYPE {
 
 typedef struct {
 		/* char *name; */
-		char name[100];
+		char name[32];
 }Row;
 
 typedef struct {
@@ -41,6 +41,7 @@ typedef struct {
 		void *pages[MAX_PAGES];
 		int file_descriptor;
 		int num_pages;
+		uint32_t available_bytes;
 } Pager;
 
 typedef struct {
@@ -62,34 +63,38 @@ typedef struct {
 } Statement;
 
 
-const uint32_t PAGE_SIZE = 50;
-const uint32_t NODE_TYPE_SIZE = sizeof(uint32_t); // 0 = internal, 1 = leaf
-const uint32_t HEADER_SIZE = NODE_TYPE_SIZE;
-const uint32_t NAME_SIZE = size_of_attribute(Row, name);
+const uint32_t PAGE_SIZE = 100;
 /* const uint32_t NAME_SIZE = 100; */
-const uint32_t NAME_OFFSET = HEADER_SIZE;
+
+const uint32_t PAGE_HEADER_NUM_NODES_SIZE = sizeof(uint32_t);
+const uint32_t PAGE_HEADER_NUM_NODES_OFFSET = 0;
+const uint32_t PAGE_HEADER_FREE_BYTES_SIZE = sizeof(uint32_t);
+const uint32_t PAGE_HEADER_FREE_BYTES_OFFSET = PAGE_HEADER_NUM_NODES_SIZE;
+const uint32_t PAGE_HEADER_NUM_PAGES_SIZE = sizeof(uint32_t);
+const uint32_t PAGE_HEADER_NUM_PAGES_OFFSET = PAGE_HEADER_NUM_NODES_SIZE + PAGE_HEADER_FREE_BYTES_SIZE;
+
+const uint32_t HEADER_SIZE = PAGE_HEADER_NUM_NODES_SIZE + PAGE_HEADER_FREE_BYTES_SIZE;
+
+const uint32_t NAME_SIZE = size_of_attribute(Row, name);
 const uint32_t ROW_SIZE = NAME_SIZE;
-const uint32_t NODE_SIZE = HEADER_SIZE + ROW_SIZE;
-
-const uint32_t GLOBAL_HEADER_NUM_NODES_SIZE = sizeof(uint32_t);
-const uint32_t GLOBAL_HEADER_NUM_NODES_OFFSET = 0;
-
 const uint32_t MAX_QUERY_TYPE_SIZE = 8;
+const uint32_t MAX_NODES_IN_A_PAGE = (PAGE_SIZE - HEADER_SIZE) / ROW_SIZE;
 
 uint32_t *get_num_nodes_address(void *node) {
-		return node + GLOBAL_HEADER_NUM_NODES_OFFSET;
+		return node + PAGE_HEADER_NUM_NODES_OFFSET;
 }
 
-uint32_t get_num_nodes_value(void *node) {
-		return *((uint32_t *)node + GLOBAL_HEADER_NUM_NODES_OFFSET);
+uint32_t *page_header_num_nodes_value(void *node) {
+		return (uint32_t *)node + PAGE_HEADER_NUM_NODES_OFFSET;
 }
 
-void set_num_nodes(void *node, int value) {
-		*get_num_nodes_address(node) = value;
+uint32_t *page_header_free_bytes_value(void *node) {
+		return (uint32_t *)node + PAGE_HEADER_FREE_BYTES_OFFSET;
 }
 
 void *get_cell_address(void *node, uint32_t cell_no) {
-		return node + GLOBAL_HEADER_NUM_NODES_SIZE + (cell_no * ROW_SIZE);
+		/* return node + PAGE_HEADER_NUM_NODES_SIZE + PAGE_HEADER_FREE_BYTES_SIZE + ((cell_no + 1)* ROW_SIZE); */
+		return node + HEADER_SIZE + ((cell_no + 1)* ROW_SIZE);
 }
 
 void *get_page(Pager *pager, int page_no) {
@@ -104,19 +109,18 @@ void *get_page(Pager *pager, int page_no) {
 				// allocate PAGE_SIZE and get starting address of the page
 				//
         int no_of_pages = pager->file_length / PAGE_SIZE;
-				printf("no_of_pages = %d\n", no_of_pages);
-
 				if (pager->file_length % PAGE_SIZE) {
 						no_of_pages++;
 				}
 
 				void *page = malloc(PAGE_SIZE);
+				*page_header_free_bytes_value(page) = PAGE_SIZE - HEADER_SIZE;
+				*page_header_num_nodes_value(page) = 0;
+
 				int page_bytes = page_no * PAGE_SIZE;
 				if (page_no <= no_of_pages) {
 						lseek(pager->file_descriptor, page_bytes, SEEK_SET);
 						int bytes_read = read(pager->file_descriptor, page, PAGE_SIZE);
-						printf("page = %s\n", (char *)page);
-						/* printf("read = %d\n", bytes_read); */
 						if (bytes_read == -1) {
 								printf("error reading file\n");
 								exit(1);
@@ -127,9 +131,7 @@ void *get_page(Pager *pager, int page_no) {
 				if (page_no > pager->num_pages) {
 						pager->num_pages = page_no + 1;
 				}
-				printf("got page\n");
 		}
-
 		return pager->pages[page_no];
 }
 
@@ -138,7 +140,6 @@ Pager *open_pager() {
 
 		int file_descriptor = open("source", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
     int file_length = lseek(file_descriptor, 0, SEEK_END);
-		printf("len = %d\n", file_length);
 
 		for (int t=0;t<MAX_PAGES;t++) {
 				pager->pages[t] = NULL;
@@ -156,10 +157,13 @@ Table *open_table() {
 		new_table->pager = open_pager();
 		new_table->no_of_rows = new_table->pager->file_length / ROW_SIZE;
 
-		if (new_table->no_of_rows == 0) {
+		if (new_table->pager->file_length == 0) {
+
 				new_table->pager->pages[0] = get_page(new_table->pager, 0);
-				set_num_nodes(new_table->pager->pages[0], 0);
+				*page_header_num_nodes_value(new_table->pager->pages[0]) = 0;
+				*page_header_free_bytes_value(new_table->pager->pages[0]) = PAGE_SIZE - ROW_SIZE;
 		}
+		/* printf("free bytes = %d\n", *page_header_free_bytes_value(new_table->pager->pages[0])); */
 
 		return new_table;
 }
@@ -175,8 +179,9 @@ int flush_page_to_disk(Pager *pager, int page_no) {
 void write_to_disk(Table *table) {
 		Pager *pager = table->pager;
 		int total_bytes_written_to_disk = 0;
-		for (int t=0;t<=MAX_PAGES;t++) {
+		for (int t=0;t<MAX_PAGES;t++) {
 				if (pager->pages[t] == NULL) {
+						/* printf("%d is NULL\n", t); */
 						continue;
 				}
 
@@ -196,39 +201,44 @@ void deserialize_row(void *source, Row *destination) {
 void insert_query(Cursor *cursor, Row *row) {
 		Table *table = cursor->table;
 
-		/* move_cursor_to_insert_position(cursor); */
-
-		/* uint32_t insert_offset = table->table_row_count * (HEADER_SIZE + ROW_SIZE); */
-
 		Pager *pager = table->pager;
-		void *page = pager->pages[cursor->page_no];
-		uint32_t no_of_cells = get_num_nodes_value(page);
+		void *page;
+		page = get_page(pager, cursor->page_no);
+		uint32_t space_available = *page_header_free_bytes_value(page);
+		if (space_available < ROW_SIZE) {
+				cursor->page_no++;
+				pager->num_pages += 1;
+				page = get_page(pager, cursor->page_no);
+				printf("created new page %d\n", cursor->page_no);
+		}
+
+		uint32_t no_of_cells = *page_header_num_nodes_value(page);
 		uint32_t cell_to_be_inserted = no_of_cells;
 
+
 		void *destination = get_cell_address(page, cell_to_be_inserted);
-		printf("inserted row at %p\n", destination);
 
 		serialize_row(destination, row);
 
 		table->no_of_rows += 1;
-		set_num_nodes(page, cell_to_be_inserted + 1);
+		printf("space available = %d, row_size = %d\n", space_available, ROW_SIZE);
+		*page_header_num_nodes_value(page) = no_of_cells + 1;
+		*page_header_free_bytes_value(page) -= ROW_SIZE;
 
-		printf("cells = %d\n", get_num_nodes_value(page));
+
+		printf("cells = %d\n", *page_header_num_nodes_value(page));
 		write_to_disk(table);
 }
 
 Cursor *cursor_at_table_start(Table *table) {
 		Cursor *cursor = malloc(sizeof(Cursor));
-		/* void *first_cell_first_page_location = table->pager->pages[0] + NUM_NODES_SIZE; */
 
 		cursor->table = table;
 		cursor->page_no = 0;
 		cursor->cell_no = 0;
-		printf("%d", cursor->page_no);
 
 		void *page = get_page(table->pager, 0);
-		int no_of_cells = get_num_nodes_value(page);
-		printf("no of cells = %d\n", no_of_cells);
+		int no_of_cells = *page_header_num_nodes_value(page);
 
 		cursor->end_of_table = (no_of_cells == 0);
 
@@ -236,10 +246,16 @@ Cursor *cursor_at_table_start(Table *table) {
 }
 
 void cursor_next(Cursor *cursor) {
-		void *page = get_page(cursor->table->pager, cursor->page_no);
-		int no_of_cells = get_num_nodes_value(page);
-
 		cursor->cell_no += 1;
+		if (cursor->cell_no % MAX_NODES_IN_A_PAGE == 0) {
+				cursor->page_no += 1;
+				cursor->cell_no = 0;
+				cursor->table->pager->num_pages += 1;
+				/* cursor->table->pager->pages[cursor->page_no] = get_page(cursor->table->pager, cursor->page_no); */
+		}
+
+		void *page = get_page(cursor->table->pager, cursor->page_no);
+		int no_of_cells = *page_header_num_nodes_value(page);
 		if (cursor->cell_no == no_of_cells) {
 				cursor->end_of_table = 1;
 		}
@@ -252,19 +268,18 @@ void *cursor_value(Cursor *cursor) {
 
 void select_query(Table *table) {
 		Cursor *cursor = cursor_at_table_start(table);
-
 		Pager *pager = table->pager;
-		void *page = pager->pages[cursor->page_no];
-		uint32_t no_of_cells = get_num_nodes_value(page);
 
-		void *start = page + GLOBAL_HEADER_NUM_NODES_SIZE;
-		while (!cursor->end_of_table) {
+		for (int t=0;t<=pager->num_pages;t++) {
+				void *page = pager->pages[t];
+				uint32_t no_of_cells = *page_header_num_nodes_value(page);
+
 				Row *row = malloc(sizeof(Row));
-				/* void *cell_address = cursor_value(cursor); */
-				void *cell_address = get_cell_address(page, cursor->cell_no);
+
+				void *cell_address = get_cell_address(page, cursor->cell_no % MAX_NODES_IN_A_PAGE);
 
 				deserialize_row(cell_address, row);
-				printf("cell_no = %d, name = %s, addr = %p\n", cursor->cell_no, row->name, cell_address);
+				printf("page = %d, cell_no = %d, addr = %p, NAME = %s\n", cursor->page_no, cursor->cell_no, cell_address, row->name);
 
 				cursor_next(cursor);
 		}
@@ -334,8 +349,7 @@ int main() {
 						statement->row = make_row(name);
 						statement->statement_type = QUERY_INSERT;
 				}
-
 				prepare_statement(statement, table);
 		}
-		return 0;
+				return 0;
 }
