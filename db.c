@@ -26,6 +26,7 @@ enum QUERY_TYPE {
 
 typedef struct {
 		/* char *name; */
+		int id;
 		char name[32];
 }Row;
 
@@ -68,8 +69,12 @@ const uint32_t PAGE_HEADER_NUM_PAGES_OFFSET = PAGE_HEADER_NUM_NODES_SIZE + PAGE_
 
 const uint32_t HEADER_SIZE = PAGE_HEADER_NUM_NODES_SIZE + PAGE_HEADER_FREE_BYTES_SIZE;
 
+const uint32_t ID_SIZE = size_of_attribute(Row, id);
+const uint32_t ID_OFFSET = 0;
 const uint32_t NAME_SIZE = size_of_attribute(Row, name);
-const uint32_t ROW_SIZE = NAME_SIZE;
+const uint32_t NAME_OFFSET = ID_OFFSET + ID_SIZE;
+
+const uint32_t ROW_SIZE = NAME_SIZE + ID_SIZE;
 const uint32_t MAX_QUERY_TYPE_SIZE = 8;
 const uint32_t MAX_NODES_IN_A_PAGE = (PAGE_SIZE - HEADER_SIZE) / ROW_SIZE;
 
@@ -190,11 +195,13 @@ void write_to_disk(Table *table) {
 		printf("written %d bytes to disk\n", total_bytes_written_to_disk);
 }
 void serialize_row(void *destination, Row *row) {
-		memcpy(destination, &(row->name), NAME_SIZE);
+		memcpy(destination + ID_OFFSET, &(row->id), ID_SIZE);
+		memcpy(destination + NAME_OFFSET, &(row->name), NAME_SIZE);
 }
 
 void deserialize_row(void *source, Row *destination) {
-		memcpy(&(destination->name), source, NAME_SIZE);
+		memcpy(&(destination->id), source + ID_OFFSET, ID_SIZE);
+		memcpy(&(destination->name), source + NAME_OFFSET, NAME_SIZE);
 }
 
 Cursor *cursor_at_table_end(Table *table) {
@@ -293,7 +300,7 @@ void select_query(Table *table) {
 				Row *row = malloc(sizeof(Row));
 				void *cell_address = get_cell_address(page, cursor->cell_no % MAX_NODES_IN_A_PAGE);
 				deserialize_row(cell_address, row);
-				printf("page = %d, cell_no = %d, addr = %p, NAME = %s\n", cursor->page_no, cursor->cell_no, cell_address, row->name);
+				printf("page = %d, cell_no = %d, addr = %p, ID = %d, NAME = %s\n", cursor->page_no, cursor->cell_no, cell_address, row->id, row->name);
 
 				cursor_next(cursor);
 		}
@@ -332,8 +339,9 @@ void prepare_statement(Statement *statement, Table *table) {
 		}
 }
 
-Row *make_row(char *name) {
+Row *make_row(int id, char *name) {
 		Row *row = malloc(sizeof(Row));
+		row->id = id;
 		strcpy(row->name, name);
 		return row;
 }
@@ -365,8 +373,9 @@ int main() {
 						statement->statement_type = QUERY_SELECT;
 				} else if (are_strings_equal(query_type, QUERY_TYPE_INSERT)) {
 						char *name = malloc(NAME_SIZE);
-						scanf("%s", name);
-						statement->row = make_row(name);
+						int id;
+						scanf("%d %s", &id, name);
+						statement->row = make_row(id, name);
 						statement->statement_type = QUERY_INSERT;
 				}
 				prepare_statement(statement, table);
