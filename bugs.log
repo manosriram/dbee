@@ -1,4 +1,3 @@
-insert writes to existing space [x]
-
-cursor is not being set to the right position before insertion [x]
-cursor cell and page navigation is not clear, should fix this (maybe cursor_at_table_end() before insertion should work) [x]
+[x] insert writes to existing space
+[x] cursor is not being set to the right position before insertion
+[x] cursor cell and page navigation is not clear, should fix this (maybe cursor_at_table_end() before insertion should work)
