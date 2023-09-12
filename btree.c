@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX 3
+#define MAX 5
 #define NIL '\0'
-
 
 struct BTreeNode {
 		int keys[MAX];
@@ -16,9 +15,9 @@ struct BTreeNode {
 struct BTreeNode *new_btree_node(int key, int is_leaf_node) {
 		struct BTreeNode *node = (struct BTreeNode *)malloc(sizeof(struct BTreeNode));
 		node->is_leaf_node = is_leaf_node;
-		node->parent = (struct BTreeNode *)malloc(sizeof(struct BTreeNode));
+		node->parent = NULL;
 		node->keys[0] = key;
-		for (int t=0;t<MAX+1;t++) {
+		for (int t=0;t<=MAX;t++) {
 				node->children[t] = NULL;
 		}
 		node->key_count = 1;
@@ -27,14 +26,6 @@ struct BTreeNode *new_btree_node(int key, int is_leaf_node) {
 
 void insert(struct BTreeNode *, int);
 struct BTreeNode *split_node(struct BTreeNode *);
-
-struct BTreeNode *get_to_top(struct BTreeNode *node) {
-		while (node->parent != NULL) {
-				node = node->parent;
-				printf("parent key 1 = %d\n", node->keys[0]);
-		}
-		return node;
-}
 
 int get_insert_position(struct BTreeNode *root, int key) {
 		for (int t=0;t<MAX;t++) {
@@ -90,11 +81,11 @@ struct BTreeNode *split_node(struct BTreeNode *root) {
 				right_pos++;
 		}
 
-		int x = 0;
+		right_pos = 0;
 		for (int t=median+1;t<=MAX;t++) {
-				if (root->children[x] != NULL) {
-						right->children[x] = root->children[t];
-						x++;
+				if (root->children[right_pos] != NULL) {
+						right->children[right_pos] = root->children[t];
+						right_pos++;
 				}
 		}
 
@@ -120,7 +111,6 @@ struct BTreeNode *split_node(struct BTreeNode *root) {
 
 				root->children[0] = left;
 				root->children[1] = right;
-
 				root->parent = NULL;
 
 				right->parent = root;
@@ -155,27 +145,22 @@ void insert(struct BTreeNode *root, int key) {
 		}
 }
 
-void find_insert_node(struct BTreeNode *root, int key) {
+void find_and_insert_node(struct BTreeNode *root, int key) {
 		if (root->is_leaf_node) {
-				/* if (root->key_count == MAX) { */
-						/* root = split_node(root); */
-				/* } */
 				insert(root, key);
 				return;
 		}
 
 		for (int t=0;t<MAX;t++) {
 				if (root->keys[t] == NIL)
-						return find_insert_node(root->children[t], key);
-
-				/* printf("key = %d\n", root->keys[t]); */
+						return find_and_insert_node(root->children[t], key);
 
 				if (root->keys[t] > key) {
-						return find_insert_node(root->children[t], key);
+						return find_and_insert_node(root->children[t], key);
 				}
 		}
 
-		return find_insert_node(root->children[root->key_count], key);
+		return find_and_insert_node(root->children[root->key_count], key);
 }
 
 void print(struct BTreeNode *root) {
@@ -197,25 +182,26 @@ void print(struct BTreeNode *root) {
 
 int main() {
 		struct BTreeNode *root = new_btree_node(10, 1);
-		root->parent = NULL;
 
-		find_insert_node(root, 12);
-		find_insert_node(root, 11);
-		find_insert_node(root, 13);
-		find_insert_node(root, 14);
-		find_insert_node(root, 15);
+		find_and_insert_node(root, 12);
+		find_and_insert_node(root, 11);
+		find_and_insert_node(root, 13);
+		find_and_insert_node(root, 12);
+		/* find_and_insert_node(root, 14); */
+		/* find_and_insert_node(root, 15); */
 
-		find_insert_node(root, 16);
-		find_insert_node(root, 17);
+		/* find_and_insert_node(root, 16); */
+		/* find_and_insert_node(root, 17); */
 		
-		find_insert_node(root, 18);
-		find_insert_node(root, 20);
+		/* find_and_insert_node(root, 18); */
+		/* find_and_insert_node(root, 20); */
 
-		find_insert_node(root, 21);
-		find_insert_node(root, 1);
-		find_insert_node(root, 2);
-		find_insert_node(root, 32);
-		find_insert_node(root, 33);
+		/* find_and_insert_node(root, 21); */
+		/* find_and_insert_node(root, 1); */
+		/* find_and_insert_node(root, 2); */
+		/* find_and_insert_node(root, 32); */
+		/* find_and_insert_node(root, 33); */
+		/* find_and_insert_node(root, 34); */
 
 		print(root);
 		return 0;
