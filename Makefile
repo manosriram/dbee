@@ -10,6 +10,9 @@ run:
 destroy:
 	rm source
 
+format:
+	clang-format -i *.c
+
 source:
 ifneq ("$(wildcard source)","")
 		hexdump -C ./source
