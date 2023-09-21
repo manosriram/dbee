@@ -153,7 +153,7 @@ void _serialize_row(void *destination, BTreeNode *row) {
 
 		/* destination += HEADER_SIZE; */
 
-		printf("serializing parent -- %d\n", row->parent);
+		/* printf("serializing parent -- %d\n", row->parent); */
     memcpy(destination + NODE_OFFSET_OFFSET, &(row->offset), NODE_OFFSET_SIZE);
     memcpy(destination + NODE_PARENT_OFFSET, &(row->parent), NODE_PARENT_SIZE);
     memcpy(destination + NODE_IS_LEAF_NODE_OFFSET, &(row->is_leaf_node),
@@ -170,7 +170,8 @@ void _serialize_row(void *destination, BTreeNode *row) {
 		dest = destination + NODE_CHILDREN_OFFSET;
 		for (int t=0;t<=BTREE_MAX_KEY_SIZE;t++) {
 				dest += ((t) * sizeof(int));
-				memcpy(dest, &row->children[t], sizeof(int));
+				printf(" serializing row child %d\n", row->children[t]);
+				memcpy(dest, &(row->children[t]), sizeof(int));
 		}
     /* memcpy(destination + NODE_CHILDREN_OFFSET, &(row->children), */
            /* NODE_CHILDREN_SIZE); */
@@ -417,11 +418,12 @@ BTreeNode *split_node(Table *table, BTreeNode *root) {
 				for (int t = 1; t < BTREE_MAX_KEY_SIZE; t++) {
 						root->keys[t] = malloc(sizeof(Row));
 				}
-        for (int t = 0; t < BTREE_MAX_KEY_SIZE + 1; t++)
+        for (int t = 0; t <= BTREE_MAX_KEY_SIZE; t++)
             root->children[t] = NIL;
 
         root->children[0] = left->offset;
         root->children[1] = right->offset;
+				printf("children -- %d, %d\n", root->children[0], root->children[1]);
         root->parent = -1;
 
         right->parent = root->offset;
@@ -431,10 +433,10 @@ BTreeNode *split_node(Table *table, BTreeNode *root) {
 				_serialize_row(page + PAGE_HEADER_ROOT_NODE_OFFSET, root);
     }
 
-		void *left_destination = page + PAGE_HEADER_ROOT_NODE_OFFSET + left_offset;
+		void *left_destination = page + left_offset;
 		_serialize_row(left_destination, left);
 
-		void *right_destination = page + PAGE_HEADER_ROOT_NODE_OFFSET + right_offset;
+		void *right_destination = page + right_offset;
 		_serialize_row(right_destination, right);
 
     return root;
@@ -486,13 +488,12 @@ BTreeNode *get_root_node(void *page) {
 
 
 void find_and_insert_node(Table *table, void *page, int root_offset, Row *key) {
-		if (root_offset < 0) return;
+		if (root_offset <= 0) return;
 
 		BTreeNode *root = malloc(sizeof(BTreeNode));
-		void *src = get_page(table->pager, 0) + PAGE_HEADER_ROOT_NODE_OFFSET;
+		void *src = get_page(table->pager, 0) + root_offset;
 		_deserialize_row(src, root);
 
-    /* BTreeNode *root = get_node_from_offset(page, root_offset); */
 		printf("got root = %d, is_leaf = %d, key_count = %d, key = %d, parent = %d\n", root->offset, root->is_leaf_node, root->key_count, root->keys[0]->id, root->parent);
 
     if (root->is_leaf_node) {
@@ -502,7 +503,7 @@ void find_and_insert_node(Table *table, void *page, int root_offset, Row *key) {
 
     for (int t = 0; t < BTREE_MAX_KEY_SIZE; t++) {
         if (root->keys[t] == NULL)
-            return find_and_insert_node(table, page, root->children[t], key);
+						return find_and_insert_node(table, page, root->children[t], key);
 
         if (root->keys[t]->id > key->id) {
             return find_and_insert_node(table, page, root->children[t], key);
@@ -617,7 +618,7 @@ void insert_query(Table *table, Row *row) {
 
 				/* printf("offset = %d, is_leaf = %d, parent = %d, root_key_count = %d, key_name = %s\n", root->offset, root->is_leaf_node, root->parent, root->key_count, root->keys[0]->name); */
 
-				find_and_insert_node(table, page, 16, row);
+				find_and_insert_node(table, page, 12, row);
 		}
 
 
