@@ -19,6 +19,6 @@ int main() {
 
     /* printf("%d\n", copy_address[1]); */
 
-    printf("%lu\n", sizeof(X));
+    printf("%lu\n", sizeof(int[2]));
     return 0;
 }

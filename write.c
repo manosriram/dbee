@@ -93,11 +93,11 @@ int main() {
     memcpy(x + 136, &(right->left), 4);
     memcpy(x + 140, &(right->right), 4);
 
-    int file_descriptor = open("write", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
-    lseek(file_descriptor, node->offset, SEEK_SET);
-    int bytes_written = write(file_descriptor, x, 150);
+    int file_descriptor = open("tree", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+    lseek(file_descriptor, 120, SEEK_SET);
+    /* int bytes_written = write(file_descriptor, x, 150); */
 
-    /* struct Node *from_off = get_node_from_offset(node->offset); */
+		struct Node *from_off = get_node_from_offset(120);
     /* printf("%s, %d\n", from_off->name, from_off->offset); */
 
     /* printf("%d", node->offset); */
