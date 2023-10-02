@@ -109,7 +109,7 @@ struct BTreeNode *get_node_from_offset(int offset) {
     lseek(file_descriptor, offset, SEEK_SET);
     int bytes_read = read(file_descriptor, offset_address, 1000);
 
-		_deserialize_row(offset_address, node);
+    _deserialize_row(offset_address, node);
 
     /* memcpy(&(node->name), offset_address, 32); */
     /* memcpy(&(node->offset), offset_address + 32, 4); */
@@ -137,7 +137,6 @@ struct BTreeNode *new_btree_node(struct Row *key, int is_leaf_node) {
     return node;
 }
 
-
 int get_insert_position(struct BTreeNode *root, int key) {
     for (int t = 0; t < MAX; t++) {
         if (root->keys[t] == NULL || root->keys[t]->id > key) {
@@ -157,12 +156,12 @@ struct BTreeNode *push_to_parent_node(struct BTreeNode *root,
 
     printf("parent offset = %d\n", parent->offset);
     int key_position = get_insert_position(parent, key->id);
-		printf("position = %d\n", key_position);
-		/* for (int t=0;t<MAX;t++) { */
-				/* if (parent->keys[t] == NULL) { */
-						/* parent->keys[t] = malloc(sizeof(struct Row)); */
-				/* } */
-		/* } */
+    printf("position = %d\n", key_position);
+    /* for (int t=0;t<MAX;t++) { */
+    /* if (parent->keys[t] == NULL) { */
+    /* parent->keys[t] = malloc(sizeof(struct Row)); */
+    /* } */
+    /* } */
     for (int t = MAX - 1; t > key_position; t--) {
         /* printf("in loop"); */
         // parent->keys[t] = parent->keys[t - 1];
@@ -176,9 +175,9 @@ struct BTreeNode *push_to_parent_node(struct BTreeNode *root,
     parent->children[key_position] = left_child->offset;
     parent->children[key_position + 1] = right_child->offset;
     parent->is_leaf_node = 0;
-		/* parent->offset = root->offset; */
+    /* parent->offset = root->offset; */
 
-		/* insert(parent, key); */
+    /* insert(parent, key); */
     /* root->offset = parent->offset; */
 
     /* printf("leftt = %d\n", left_child->offset); */
@@ -232,29 +231,33 @@ struct BTreeNode *split_node(struct BTreeNode *root) {
 
     for (int t = 0; t < MAX; t++) {
         if (left->children[t]) {
-            struct BTreeNode *left_node_child = get_node_from_offset(left->children[t]);
+            struct BTreeNode *left_node_child =
+                get_node_from_offset(left->children[t]);
             _deserialize_row(page + left->children[t], left_node_child);
-            printf("left->children[t] = %d, left child = %d\n", left->children[t], left_node_child->offset);
+            printf("left->children[t] = %d, left child = %d\n",
+                   left->children[t], left_node_child->offset);
 
             left_node_child->parent = left->offset;
             _serialize_row(page + left->children[t], left_node_child);
         }
         if (right->children[t]) {
-            struct BTreeNode *right_node_child = get_node_from_offset(right->children[t]);
+            struct BTreeNode *right_node_child =
+                get_node_from_offset(right->children[t]);
             /* _deserialize_row(page + right->children[t], right_node_child); */
-            printf("right->children[t] = %d, right child = %d\n", right->children[t], right_node_child->offset);
+            printf("right->children[t] = %d, right child = %d\n",
+                   right->children[t], right_node_child->offset);
 
             right_node_child->parent = right->offset;
             _serialize_row(page + right->children[t], right_node_child);
         }
     }
-		printf("root off = %d\n", root->offset);
+    printf("root off = %d\n", root->offset);
 
     if (root->parent != NIL) {
-				printf("before root = %d\n", root->offset);
+        printf("before root = %d\n", root->offset);
         root = push_to_parent_node(root, left, right, root->keys[median]);
         /* printf("after done\n"); */
-				printf("after root = %d\n", root->offset);
+        printf("after root = %d\n", root->offset);
         right->parent = root->offset;
         left->parent = root->offset;
     } else {
@@ -280,7 +283,7 @@ struct BTreeNode *split_node(struct BTreeNode *root) {
     /* printf("root = %d\n", root->keys[0]); */
     /* printf("left = %d\n", left->keys[0]); */
     /* printf("right = %d\n", right->keys[0]); */
-		_serialize_row(page + root->offset, root);
+    _serialize_row(page + root->offset, root);
     _serialize_row(page + left->offset, left);
     _serialize_row(page + right->offset, right);
 
@@ -308,10 +311,10 @@ void insert(struct BTreeNode *root, struct Row *key) {
 
     if (root->key_count == MAX) {
         while (root->key_count == MAX) {
-						/* lseek(fd, 0, SEEK_SET); */
-						/* int bytes_read = read(fd, page, 1000); */
+            /* lseek(fd, 0, SEEK_SET); */
+            /* int bytes_read = read(fd, page, 1000); */
             root = split_node(root);
-						write_page();
+            write_page();
         }
         /* printf("done11"); */
     } else {
@@ -426,7 +429,7 @@ int main() {
     /* find_and_insert_node(root, 32); */
     /* find_and_insert_node(root, 33); */
     /* find_and_insert_node(root, 34); */
-		print(8);
+    print(8);
 
     return 0;
 }

@@ -97,7 +97,7 @@ int main() {
     lseek(file_descriptor, 120, SEEK_SET);
     /* int bytes_written = write(file_descriptor, x, 150); */
 
-		struct Node *from_off = get_node_from_offset(120);
+    struct Node *from_off = get_node_from_offset(120);
     /* printf("%s, %d\n", from_off->name, from_off->offset); */
 
     /* printf("%d", node->offset); */
