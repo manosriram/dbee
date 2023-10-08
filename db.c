@@ -1,3 +1,4 @@
+#include "btree.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -9,7 +10,7 @@
 #include <unistd.h>
 
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
-#define MAX_PAGES 100
+#define MAX_PAGES 20
 
 #define QUERY_TYPE_INSERT "insert"
 #define QUERY_TYPE_SELECT "select"
@@ -22,12 +23,6 @@ enum QUERY_TYPE {
     QUERY_EXIT,
     QUERY_INFO,
 };
-
-typedef struct {
-    /* char *name; */
-    int id;
-    char name[32];
-} Row;
 
 typedef struct {
     uint32_t file_length;
@@ -55,7 +50,6 @@ typedef struct {
     Row *row;
 } Statement;
 
-const uint32_t PAGE_SIZE = 100;
 /* const uint32_t NAME_SIZE = 100; */
 
 const uint32_t PAGE_HEADER_NUM_NODES_SIZE = sizeof(uint32_t);
@@ -74,7 +68,7 @@ const uint32_t ID_OFFSET = 0;
 const uint32_t NAME_SIZE = size_of_attribute(Row, name);
 const uint32_t NAME_OFFSET = ID_OFFSET + ID_SIZE;
 
-const uint32_t ROW_SIZE = NAME_SIZE + ID_SIZE;
+const uint32_t ROW_SIZE = sizeof(BTreeNode);
 const uint32_t MAX_QUERY_TYPE_SIZE = 8;
 const uint32_t MAX_NODES_IN_A_PAGE = (PAGE_SIZE - HEADER_SIZE) / ROW_SIZE;
 
@@ -97,7 +91,12 @@ uint32_t *page_header_num_pages_value(void *node) {
 void *get_cell_address(void *node, uint32_t cell_no) {
     /* return node + PAGE_HEADER_NUM_NODES_SIZE + PAGE_HEADER_FREE_BYTES_SIZE +
      * ((cell_no + 1)* ROW_SIZE); */
-    return node + HEADER_SIZE + ((cell_no + 1) * ROW_SIZE);
+    return node + HEADER_SIZE + ((cell_no)*ROW_SIZE);
+}
+
+int get_next_block_offset(void *page) {
+    return (*page_header_num_nodes_value(page) * sizeof(BTreeNode)) +
+           ROOT_OFFSET;
 }
 
 void *get_page(Pager *pager, int page_no) {
@@ -239,14 +238,21 @@ void insert_query(Table *table, Row *row) {
     uint32_t cell_to_be_inserted = no_of_cells;
     space_available = *page_header_free_bytes_value(page);
 
-    void *destination = get_cell_address(page, cell_to_be_inserted);
+    if (no_of_cells == 0) {
+        BTreeNode *root = new_btree_node(row, 1, page);
+        _serialize_row(page + ROOT_OFFSET, root);
+    } else {
+        find_and_insert_node(ROOT_OFFSET, row, page);
+    }
+    /* void *destination = get_cell_address(page, cell_to_be_inserted); */
 
-    serialize_row(destination, row);
+    /* serialize_row(destination, row); */
 
     /* printf("space available = %d, row_size = %d\n", space_available,
      * ROW_SIZE);
      */
     *page_header_num_nodes_value(page) = no_of_cells + 1;
+    *page_header_num_pages_value(page) = 0;
     *page_header_free_bytes_value(page) = space_available - ROW_SIZE;
 
     table->no_of_rows += 1;
@@ -273,14 +279,14 @@ Cursor *cursor_at_table_start(Table *table) {
 void cursor_next(Cursor *cursor) {
     cursor->cell_no += 1;
 
-    if (cursor->cell_no == MAX_NODES_IN_A_PAGE &&
-        cursor->page_no ==
-            *page_header_num_pages_value(get_page(cursor->table->pager, 0))) {
+    void *page = get_page(cursor->table->pager, cursor->page_no);
+    if (cursor->cell_no == *page_header_num_nodes_value(page) &&
+        cursor->page_no == *page_header_num_pages_value(page)) {
         cursor->end_of_table = 1;
         return;
     }
 
-    if (cursor->cell_no % MAX_NODES_IN_A_PAGE == 0) {
+    if (cursor->cell_no == *page_header_num_nodes_value(page)) {
         cursor->cell_no = 0;
         cursor->page_no += 1;
         return;
@@ -298,17 +304,19 @@ void select_query(Table *table) {
 
     uint32_t no_of_pages = *page_header_num_pages_value(get_page(pager, 0));
 
+    int x = 0;
     while (!cursor->end_of_table) {
         void *page = get_page(pager, cursor->page_no);
-        uint32_t no_of_cells = *page_header_num_nodes_value(page);
+        /* uint32_t no_of_cells = *page_header_num_nodes_value(page); */
+        p(ROOT_OFFSET, page + (x++ * PAGE_SIZE));
 
-        Row *row = malloc(sizeof(Row));
-        void *cell_address =
-            get_cell_address(page, cursor->cell_no % MAX_NODES_IN_A_PAGE);
-        deserialize_row(cell_address, row);
-        printf("page = %d, cell_no = %d, addr = %p, ID = %d, NAME = %s\n",
-               cursor->page_no, cursor->cell_no, cell_address, row->id,
-               row->name);
+        /* Row *row = malloc(sizeof(Row)); */
+        /* void *cell_address = */
+        /* get_cell_address(page, cursor->cell_no % MAX_NODES_IN_A_PAGE); */
+        /* deserialize_row(cell_address, row); */
+        /* printf("page = %d, cell_no = %d, addr = %p, ID = %d, NAME = %s\n", */
+        /* cursor->page_no, cursor->cell_no, cell_address, row->id, */
+        /* row->name); */
 
         cursor_next(cursor);
     }
@@ -328,6 +336,7 @@ void info_query(Table *table) {
            "bytes\ntable_space_consumed = %d bytes\n",
            no_of_pages, table->no_of_rows, table->no_of_rows * ROW_SIZE,
            (table->no_of_rows * ROW_SIZE) + HEADER_SIZE);
+    printf("ROOT_OFFSET = %d, HEADER_SIZE = %d\n", ROOT_OFFSET, HEADER_SIZE);
 }
 
 void prepare_statement(Statement *statement, Table *table) {

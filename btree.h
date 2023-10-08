@@ -10,14 +10,15 @@
 
 #define MAX 5
 #define NIL '\0'
-#define ROOT_OFFSET 4
-#define PAGE_SIZE 2500
+#define ROOT_OFFSET 44
+#define PAGE_SIZE 4096
 
 // const uint32_t NUMBER_OF_NODES_SIZE = sizeof(uint32_t);
 // const uint32_t ROOT_NODE_OFFSET_SIZE = sizeof(uint32_t);
 // const uint32_t HEADER_SIZE = NUMBER_OF_NODES_SIZE + ROOT_NODE_OFFSET_SIZE;
 
-uint32_t *number_of_nodes(void *node) { return (uint32_t *)node; }
+int get_next_block_offset(void *);
+uint32_t *page_header_num_nodes_value(void *);
 
 typedef struct {
     int id;
@@ -80,10 +81,6 @@ void _deserialize_row(void *source, BTreeNode *destination) {
         src += 32;
     }
     memcpy(&(destination->children), src + 36, sizeof(int[MAX + 1]));
-}
-
-int get_next_block_offset(void *page) {
-    return (*number_of_nodes(page) * sizeof(BTreeNode)) + 16;
 }
 
 void write_page(void *page) {
@@ -181,10 +178,10 @@ BTreeNode *_split_node(BTreeNode *root, void *page) {
     }
 
     left->offset = get_next_block_offset(page);
-    *number_of_nodes(page) += 1;
+    *page_header_num_nodes_value(page) += 1;
 
     right->offset = get_next_block_offset(page);
-    *number_of_nodes(page) += 1;
+    *page_header_num_nodes_value(page) += 1;
 
     for (int t = 0; t < MAX; t++) {
         if (left->children[t]) {
@@ -255,10 +252,10 @@ void _insert(BTreeNode *root, Row *key, void *page) {
             root = _split_node(root, page);
         }
     } else {
-        *number_of_nodes(page) += 1;
+        *page_header_num_nodes_value(page) += 1;
         _serialize_row(page + root->offset, root);
     }
-    write_page(page);
+    // write_page(page);
 }
 
 void find_and_insert_node(int root_offset, Row *key, void *page) {
@@ -292,7 +289,7 @@ void p(int offset, void *page) {
 
     BTreeNode *root = malloc(sizeof(BTreeNode));
     _deserialize_row(page + offset, root);
-    printf("got offset %d, root_offset %d\n", offset, root->offset);
+    printf("got offset %d, root_offset %d, is_leaf %d\n", offset, root->offset, root->is_leaf_node);
 
     for (int t = 0; t < root->key_count; t++) {
         printf("id: %d, name: %s | \t", root->keys[t]->id, root->keys[t]->name);
@@ -320,10 +317,10 @@ void p(int offset, void *page) {
 //     lseek(file_descriptor, 0, SEEK_SET);
 //     int bytes_read = read(file_descriptor, page, PAGE_SIZE);
 
-//     int cell_count = *number_of_nodes(page);
+//     int cell_count = *page_header_num_nodes_value(page);
 //     if (cell_count == 0) {
 //         _serialize_row(page + ROOT_OFFSET, root);
-//         *number_of_nodes(page) = 1;
+//         *page_header_num_nodes_value(page) = 1;
 
 //         printf("num_nodes_size = %d, root_off = %d, is_leaf = %d\n",
 //                NUMBER_OF_NODES_SIZE, root->offset, root->is_leaf_node);
