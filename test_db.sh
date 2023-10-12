@@ -1,6 +1,6 @@
 #!/bin/sh
 
-rm source;
+make clean;
 gcc -g -o db db.c;
 ./db << EOF
 insert 1 one

@@ -8,7 +8,7 @@ run:
 	./db
 
 clean:
-	rm source tree db
+	rm source db
 
 format:
 	clang-format -i *.c
