@@ -306,20 +306,20 @@ void select_query(Table *table) {
 
     int x = 0;
     /* while (x<3) { */
-        void *page = get_page(pager, cursor->page_no);
-        /* uint32_t no_of_cells = *page_header_num_nodes_value(page); */
-				p(ROOT_OFFSET, page);
-        /* p(ROOT_OFFSET, page + PAGE_SIZE); */
+    void *page = get_page(pager, cursor->page_no);
+    /* uint32_t no_of_cells = *page_header_num_nodes_value(page); */
+    p(ROOT_OFFSET, page);
+    /* p(ROOT_OFFSET, page + PAGE_SIZE); */
 
-        /* Row *row = malloc(sizeof(Row)); */
-        /* void *cell_address = */
-        /* get_cell_address(page, cursor->cell_no % MAX_NODES_IN_A_PAGE); */
-        /* deserialize_row(cell_address, row); */
-        /* printf("page = %d, cell_no = %d, addr = %p, ID = %d, NAME = %s\n", */
-        /* cursor->page_no, cursor->cell_no, cell_address, row->id, */
-        /* row->name); */
+    /* Row *row = malloc(sizeof(Row)); */
+    /* void *cell_address = */
+    /* get_cell_address(page, cursor->cell_no % MAX_NODES_IN_A_PAGE); */
+    /* deserialize_row(cell_address, row); */
+    /* printf("page = %d, cell_no = %d, addr = %p, ID = %d, NAME = %s\n", */
+    /* cursor->page_no, cursor->cell_no, cell_address, row->id, */
+    /* row->name); */
 
-				/* cursor_next(cursor); */
+    /* cursor_next(cursor); */
     /* } */
 }
 

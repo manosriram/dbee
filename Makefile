@@ -1,17 +1,21 @@
 build_run:
-	gcc ./db.c && ./a.out
+	gcc -g -o db db.c && ./db
 
 build:
-	gcc ./db.c
+	gcc -g -o db db.c
 
 run:
-	./a.out
+	./db
 
-destroy:
-	rm source
+clean:
+	rm source tree db
 
 format:
 	clang-format -i *.c
+
+test:
+	chmod +x test_db.sh
+	./test_db.sh
 
 source:
 ifneq ("$(wildcard source)","")
