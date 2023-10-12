@@ -54,7 +54,7 @@ void _serialize_row(void *destination, BTreeNode *source) {
         memcpy(dest, &(source->keys[t]->name), 32);
         dest += 32;
     }
-    memcpy(dest + 36, &(source->children), sizeof(int[MAX + 1]));
+    memcpy(dest, &(source->children), sizeof(int[MAX + 1]));
 }
 
 void _deserialize_row(void *source, BTreeNode *destination) {
@@ -80,7 +80,7 @@ void _deserialize_row(void *source, BTreeNode *destination) {
         memcpy(&(destination->keys[t]->name), src, 32);
         src += 32;
     }
-    memcpy(&(destination->children), src + 36, sizeof(int[MAX + 1]));
+    memcpy(&(destination->children), src, sizeof(int[MAX + 1]));
 }
 
 void write_page(void *page) {
@@ -289,16 +289,17 @@ void p(int offset, void *page) {
 
     BTreeNode *root = malloc(sizeof(BTreeNode));
     _deserialize_row(page + offset, root);
-    printf("got offset %d, root_offset %d, is_leaf %d\n", offset, root->offset, root->is_leaf_node);
+    // if (root->key_count == 0) return;
+    printf("got offset %d, root_offset %d, parent %d, is_leaf %d\n", offset, root->offset, root->parent, root->is_leaf_node);
 
     for (int t = 0; t < root->key_count; t++) {
         printf("id: %d, name: %s | \t", root->keys[t]->id, root->keys[t]->name);
     }
     printf("\n");
 
-    for (int t = 0; t < MAX + 1; t++) {
+    for (int t = 0; t<=MAX; t++) {
         if (root->children[t] != NIL) {
-            printf("child %d\n", root->children[t]);
+            // printf("child %d\n", root->children[t]);
             p(root->children[t], page);
         }
     }

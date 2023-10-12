@@ -305,10 +305,11 @@ void select_query(Table *table) {
     uint32_t no_of_pages = *page_header_num_pages_value(get_page(pager, 0));
 
     int x = 0;
-    while (!cursor->end_of_table) {
+    /* while (x<3) { */
         void *page = get_page(pager, cursor->page_no);
         /* uint32_t no_of_cells = *page_header_num_nodes_value(page); */
-        p(ROOT_OFFSET, page + (x++ * PAGE_SIZE));
+				p(ROOT_OFFSET, page);
+        /* p(ROOT_OFFSET, page + PAGE_SIZE); */
 
         /* Row *row = malloc(sizeof(Row)); */
         /* void *cell_address = */
@@ -318,8 +319,8 @@ void select_query(Table *table) {
         /* cursor->page_no, cursor->cell_no, cell_address, row->id, */
         /* row->name); */
 
-        cursor_next(cursor);
-    }
+				/* cursor_next(cursor); */
+    /* } */
 }
 
 int are_strings_equal(char *string_one, char *string_two) {
