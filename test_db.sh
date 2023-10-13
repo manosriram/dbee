@@ -14,7 +14,15 @@ insert 8 eight
 insert 9 nine
 insert 10 ten
 insert 11 eleven
-insert -11 minus-eleven
+insert 12 eleven
+insert 13 eleven
+insert 14 eleven
+insert 15 eleven
+insert 16 eleven
+insert 17 eleven
+insert 18 eleven
+insert 19 eleven
+insert 20 eleven
 select
 .exit
 EOF

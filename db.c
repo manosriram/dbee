@@ -50,8 +50,6 @@ typedef struct {
     Row *row;
 } Statement;
 
-/* const uint32_t NAME_SIZE = 100; */
-
 const uint32_t PAGE_HEADER_NUM_NODES_SIZE = sizeof(uint32_t);
 const uint32_t PAGE_HEADER_NUM_NODES_OFFSET = 0;
 const uint32_t PAGE_HEADER_FREE_BYTES_SIZE = sizeof(uint32_t);
@@ -107,9 +105,11 @@ void *get_page(Pager *pager, int page_no) {
     }
 
     if (pager->pages[page_no] == NULL) {
-        // get to the nth page address
-        // allocate PAGE_SIZE and get starting address of the page
-        //
+        /*
+				 *  get to the nth page address
+				 *	allocate PAGE_SIZE and get starting address of the page
+				*/
+
         int no_of_pages = pager->file_length / PAGE_SIZE;
         if (pager->file_length % PAGE_SIZE) {
             no_of_pages++;
@@ -306,10 +306,12 @@ void select_query(Table *table) {
 
     int x = 0;
     /* while (x<3) { */
-    void *page = get_page(pager, cursor->page_no);
+    void *page = get_page(pager, 0);
     /* uint32_t no_of_cells = *page_header_num_nodes_value(page); */
-    p(ROOT_OFFSET, page);
-    /* p(ROOT_OFFSET, page + PAGE_SIZE); */
+		p(ROOT_OFFSET, page);
+
+    /* page = get_page(pager, 1); */
+		/* p(ROOT_OFFSET, page); */
 
     /* Row *row = malloc(sizeof(Row)); */
     /* void *cell_address = */
